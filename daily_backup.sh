@@ -27,16 +27,16 @@ else
     BASE_BACKUP_DIR="/opt/kabballa/apps/una-backup/data"
     BX_DIRECTORY_PATH_ROOT="/opt/una"  # Default single site
     RETENTION_DAILY_DAYS=7
-    RETENTION_WEEKLY_DAYS=35
-    RETENTION_MONTHLY_DAYS=365
+    RETENTION_WEEKLY_COUNT=4
+    RETENTION_MONTHLY_COUNT=12
 fi
 
 # Ensure defaults if variables missing
 BASE_BACKUP_DIR=${BASE_BACKUP_DIR:-/opt/kabballa/apps/una-backup/data}
 BX_DIRECTORY_PATH_ROOT=${BX_DIRECTORY_PATH_ROOT:-/opt/una}
 RETENTION_DAILY_DAYS=${RETENTION_DAILY_DAYS:-7}
-RETENTION_WEEKLY_DAYS=${RETENTION_WEEKLY_DAYS:-35}
-RETENTION_MONTHLY_DAYS=${RETENTION_MONTHLY_DAYS:-365}
+RETENTION_WEEKLY_COUNT=${RETENTION_WEEKLY_COUNT:-4}
+RETENTION_MONTHLY_COUNT=${RETENTION_MONTHLY_COUNT:-12}
 
 # ==============================================================================
 # 2. Setup Directories and Date Variables
@@ -174,9 +174,11 @@ echo "--- Starting cleanup based on retention policy ---" >> "$SCRIPT_LOG"
 find "$DAILY_DIR" -type f -mtime +$RETENTION_DAILY_DAYS -exec rm -f {} \;
 echo "  🧹 Cleaned Daily backups older than $RETENTION_DAILY_DAYS days." >> "$SCRIPT_LOG"
 
+# Cleanup weekly backups (keep only RETENTION_WEEKLY_COUNT most recent files)
+cleanup_by_count "$WEEKLY_DIR" "$RETENTION_WEEKLY_COUNT" "Weekly"
+
 # Weekly & Monthly cleanup (count-based)
-cleanup_by_count "$WEEKLY_DIR" $((RETENTION_WEEKLY_DAYS / 7)) "Weekly"
-cleanup_by_count "$MONTHLY_DIR" $((RETENTION_MONTHLY_DAYS / 30)) "Monthly"
+cleanup_by_count "$MONTHLY_DIR" "$RETENTION_MONTHLY_COUNT" "Monthly"
 
 # Annual backups are kept indefinitely
 echo "  Annual backups are kept indefinitely." >> "$SCRIPT_LOG"
