@@ -18,6 +18,8 @@ If you want to support our project and help us grow it, you can [become a sponso
 
 # 🧩 KABBALLA – UNA APP Automated Backup & Retention System
 
+> Automated backup rotation, retention, and alert system for UNA CMS.
+
 ![una-backupv](assets/backup.png)
 
 This document describes how to configure and automate daily, weekly, monthly, and annual backups for UNA-based sites using **Coozila! KABBALLA Backup System**.
@@ -130,7 +132,7 @@ Expected output:
 ===== Backup rotation completed at YYYY-MM-DD HH:MM:SS =====
 ```
 
-## ✅ Summary
+## Summary
 
 | **Task**               | **Command**                                                       |
 | :--------------------- | :---------------------------------------------------------------- |
@@ -142,7 +144,7 @@ Expected output:
 
 > 🧠 **Tip:** Extend the backup system with `rclone` or `rsync` to replicate backups to remote storage (e.g., S3, Google Drive, Ceph Object Gateway).
 
-## 🤝 Contributing
+## 🤝 7. Contributing
 
 We welcome contributions to this project!
 Please refer to our [Contributing Guidelines](CONTRIBUTING.md) for detailed instructions on how to contribute.
@@ -150,12 +152,12 @@ Please refer to our [Contributing Guidelines](CONTRIBUTING.md) for detailed inst
 For questions or contributions, feel free to contact the **Backup Developer** at [lab@coozila.com](mailto:lab@coozila.com).
 
 
-## 🧭 Code of Conduct
+## 🧭 8. Code of Conduct
 
 We are committed to fostering an inclusive and respectful environment.
 Please review our [Code of Conduct](CODE_OF_CONDUCT.md) for guidelines on acceptable behavior.
 
-## 🏷️ Trademarks and Copyright
+## 🏷️ 9, Trademarks and Copyright
 
 This software listing is packaged by Romulus.
 All trademarks mentioned are the property of their respective owners, and their use does not imply any affiliation or endorsement.
@@ -165,7 +167,30 @@ All trademarks mentioned are the property of their respective owners, and their 
 Copyright (C) 2009–2025 **Coozila!**
 Licensed under the [MIT License](https://github.com/kabballa/una-backup/blob/master/LICENSE).
 
-## ⚖️ Disclaimer
+## Installation Assistance
+
+If you would like assistance with the installation of **KABBALLA – UNA APP Automated Backup & Retention System**, please contact **Romulus** at [lab@cooxila.comt](mailto:lab@cooxila.com).  
+I will be happy to help you with the installation process and ensure a smooth setup.
+
+Based on the size and complexity of your UNA project, we will provide you with a tailored pricing quote.
+
+You can also check out my profile for more information and other UNA-related solutions:  
+[Romulus](https://unacms.com/u/olariu-romeo-vicentiu)
+
+
+### After Purchase Notes
+
+After your purchase, please provide the following information via email:
+
+- Server login credentials  
+- An SSH key for secure access  
+- Details about the UNA site(s) you wish to integrate  
+- Preferred backup frequency (daily / weekly / monthly)
+
+> 💡 *All installations are handled securely and in full compliance with the MIT License terms.*
+
+
+## ⚖️ 10. Disclaimer
 
 This product is provided "as is," without any guarantees or warranties regarding its functionality, performance, or reliability.
 By using this product, you acknowledge that you do so at your own risk.
