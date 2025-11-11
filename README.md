@@ -15,6 +15,9 @@ If you want to support our project and help us grow it, you can [become a sponso
 
 # 🧩 KABBALLA – UNA APP Automated Backup & Retention System
 
+![una-backupv](assets/backup.png)
+
+
 This document describes how to configure and automate daily, weekly, monthly, and annual backups for UNA-based sites using **Coozila! KABBALLA Backup System**.
 
 ## 📁 1. Directory Structure & Files
