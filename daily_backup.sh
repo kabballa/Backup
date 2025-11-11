@@ -8,13 +8,12 @@
 #!/bin/bash
 
 # Script: daily_backup.sh
-# Location: /opt/kabballa/apps/una-backup/daily_backup.sh
-# Purpose: Performs daily backups for the UNA site defined in .env, handles rotation, and cleanup.
+# Purpose: Performs daily backups for one or more UNA sites defined in .env, handles rotation and cleanup.
 #
 # RETENTION POLICY:
-# - Daily: Retain 7 days using mtime (time-based cleanup).
-# - Weekly & Monthly: Retain based on count (number of copies to keep) using file separation (MOVE).
-# - Annual: Retained indefinitely (MOVED only on Day 001).
+# - Daily: Keep 7 days (time-based cleanup).
+# - Weekly & Monthly: Keep N most recent copies (count-based cleanup).
+# - Annual: Kept indefinitely (moved only on Day 001).
 
 # ==============================================================================
 # 1. Load Environment Variables (.env)
@@ -24,20 +23,20 @@ ENV_FILE="$(dirname "$0")/data/.env"
 if [ -f "$ENV_FILE" ]; then
     source "$ENV_FILE"
 else
-    # CRITICAL ERROR: .env file missing. Using defaults.
     echo "CRITICAL ERROR: .env file not found at $ENV_FILE. Using defaults." >&2
     BASE_BACKUP_DIR="/opt/kabballa/apps/una-backup/data"
-    WWW_DIR="/opt/una"             # Path to the single site
+    BX_DIRECTORY_PATH_ROOT="/opt/una"  # Default single site
     RETENTION_DAILY_DAYS=7
-    RETENTION_WEEKLY_COUNT=6
-    RETENTION_MONTHLY_COUNT=12
+    RETENTION_WEEKLY_DAYS=35
+    RETENTION_MONTHLY_DAYS=365
 fi
 
-# Ensure all necessary retention variables are set
+# Ensure defaults if variables missing
+BASE_BACKUP_DIR=${BASE_BACKUP_DIR:-/opt/kabballa/apps/una-backup/data}
+BX_DIRECTORY_PATH_ROOT=${BX_DIRECTORY_PATH_ROOT:-/opt/una}
 RETENTION_DAILY_DAYS=${RETENTION_DAILY_DAYS:-7}
-RETENTION_WEEKLY_COUNT=${RETENTION_WEEKLY_COUNT:-6}
-RETENTION_MONTHLY_COUNT=${RETENTION_MONTHLY_COUNT:-12}
-WWW_DIR=${WWW_DIR:-/opt/una}
+RETENTION_WEEKLY_DAYS=${RETENTION_WEEKLY_DAYS:-35}
+RETENTION_MONTHLY_DAYS=${RETENTION_MONTHLY_DAYS:-365}
 
 # ==============================================================================
 # 2. Setup Directories and Date Variables
@@ -65,7 +64,6 @@ echo "===== Backup rotation started at $(date) =====" >> "$SCRIPT_LOG"
 # 3. Core Functions
 # ==============================================================================
 
-# Function to move daily backups to long-term retention folders
 handle_retention_move() {
     local BX_DOL_URL_ROOT="$1" 
     local SOURCE_FILE="$2"
@@ -92,47 +90,42 @@ handle_retention_move() {
     fi
 }
 
-# Perform daily backup for the UNA site configured in .env
-perform_daily_backup() {
-    HEADER_FILE="$WWW_DIR/inc/header.inc.php"
+perform_backup_for_site() {
+    local SITE_DIR="$1"
+    local HEADER_FILE="$SITE_DIR/inc/header.inc.php"
 
     if [ ! -f "$HEADER_FILE" ]; then
-        echo "ERROR: header.inc.php not found in $WWW_DIR. Backup aborted." >&2
-        echo "  ❌ Backup aborted: header.inc.php missing." >> "$SCRIPT_LOG"
+        echo "ERROR: header.inc.php not found in $SITE_DIR. Skipping." >&2
+        echo "  ❌ Backup skipped for $SITE_DIR" >> "$SCRIPT_LOG"
         return
     fi
-
-    SITE_DIR=$(grep "define('BX_DIRECTORY_PATH_ROOT'" "$HEADER_FILE" | cut -d"'" -f4)
-    [ -z "$SITE_DIR" ] && SITE_DIR="$WWW_DIR"
 
     DB_NAME=$(grep "define('BX_DATABASE_NAME'" "$HEADER_FILE" | cut -d"'" -f4)
     DB_USER=$(grep "define('BX_DATABASE_USER'" "$HEADER_FILE" | cut -d"'" -f4)
     DB_PASS=$(grep "define('BX_DATABASE_PASS'" "$HEADER_FILE" | cut -d"'" -f4)
     DB_HOST=$(grep "define('BX_DATABASE_HOST'" "$HEADER_FILE" | cut -d"'" -f4)
     DB_SOCK=$(grep "define('BX_DATABASE_SOCK'" "$HEADER_FILE" | cut -d"'" -f4)
-    
+
     BX_DOL_URL_ROOT=$(grep "define('BX_DOL_URL_ROOT'" "$HEADER_FILE" | grep -v 'isset' | cut -d"'" -f4 | sed 's|https\?://||;s|/||g')
     [ -z "$BX_DOL_URL_ROOT" ] && BX_DOL_URL_ROOT=$(basename "$SITE_DIR")
 
-    echo "  Starting daily backup for $BX_DOL_URL_ROOT (Path: $SITE_DIR) at $(date)" >> "$SCRIPT_LOG"
+    echo "  Starting backup for $BX_DOL_URL_ROOT (Path: $SITE_DIR) at $(date)" >> "$SCRIPT_LOG"
 
     # --- Files Backup (HTML) ---
     TAR_FILE_PATH="$DAILY_DIR/html/${BX_DOL_URL_ROOT}-$DATE.tar.gz"
     tar -czf "$TAR_FILE_PATH" -C "$SITE_DIR" . 2>/dev/null
-    
     if [ $? -eq 0 ]; then
-        echo "  ✔️ Files backup for $BX_DOL_URL_ROOT completed." >> "$SCRIPT_LOG"
+        echo "  ✔️ Files backup completed for $BX_DOL_URL_ROOT" >> "$SCRIPT_LOG"
         handle_retention_move "$BX_DOL_URL_ROOT" "$TAR_FILE_PATH" "html"
     else
-        echo "  ❌ Files backup for $BX_DOL_URL_ROOT failed." >> "$SCRIPT_LOG"
-        echo "ERROR: Files backup failed for $BX_DOL_URL_ROOT (Source Dir: $SITE_DIR)." >&2 
+        echo "  ❌ Files backup failed for $BX_DOL_URL_ROOT" >> "$SCRIPT_LOG"
     fi
 
     # --- Database Backup (DB) ---
     DB_FILE_PATH="$DAILY_DIR/db/${BX_DOL_URL_ROOT}.db-$DATE.sql.gz"
 
     if ! command -v mysqldump >/dev/null 2>&1; then
-        echo "  ❌ mysqldump not found. Skipping database backup for $BX_DOL_URL_ROOT." >> "$SCRIPT_LOG"
+        echo "  ❌ mysqldump not found. Skipping DB backup for $BX_DOL_URL_ROOT" >> "$SCRIPT_LOG"
     else
         DB_SOCKET_ARG=""
         [ -n "$DB_SOCK" ] && DB_SOCKET_ARG="--socket=$DB_SOCK"
@@ -142,16 +135,14 @@ perform_daily_backup() {
                   --host="$DB_HOST" $DB_SOCKET_ARG "$DB_NAME" | gzip > "$DB_FILE_PATH" 2>/dev/null
 
         if [ $? -eq 0 ]; then
-            echo "  ✔️ Database backup for $BX_DOL_URL_ROOT completed." >> "$SCRIPT_LOG"
+            echo "  ✔️ Database backup completed for $BX_DOL_URL_ROOT" >> "$SCRIPT_LOG"
             handle_retention_move "$BX_DOL_URL_ROOT" "$DB_FILE_PATH" "db"
         else
-            echo "  ❌ Database backup for $BX_DOL_URL_ROOT failed." >> "$SCRIPT_LOG"
-            echo "ERROR: Database backup failed for $BX_DOL_URL_ROOT (DB: $DB_NAME)." >&2 
+            echo "  ❌ Database backup failed for $BX_DOL_URL_ROOT" >> "$SCRIPT_LOG"
         fi
     fi
 }
 
-# Cleanup function based on file count
 cleanup_by_count() {
     local DIR_PATH="$1"
     local COUNT="$2"
@@ -169,7 +160,13 @@ cleanup_by_count() {
 # 4. Execution & Cleanup
 # ==============================================================================
 
-perform_daily_backup
+# Split comma-separated sites into array
+IFS=',' read -ra SITES <<< "$BX_DIRECTORY_PATH_ROOT"
+
+for SITE_DIR in "${SITES[@]}"; do
+    SITE_DIR=$(echo "$SITE_DIR" | xargs)  # Trim whitespace
+    perform_backup_for_site "$SITE_DIR"
+done
 
 echo "--- Starting cleanup based on retention policy ---" >> "$SCRIPT_LOG"
 
@@ -178,8 +175,8 @@ find "$DAILY_DIR" -type f -mtime +$RETENTION_DAILY_DAYS -exec rm -f {} \;
 echo "  🧹 Cleaned Daily backups older than $RETENTION_DAILY_DAYS days." >> "$SCRIPT_LOG"
 
 # Weekly & Monthly cleanup (count-based)
-cleanup_by_count "$WEEKLY_DIR" "$RETENTION_WEEKLY_COUNT" "Weekly"
-cleanup_by_count "$MONTHLY_DIR" "$RETENTION_MONTHLY_COUNT" "Monthly"
+cleanup_by_count "$WEEKLY_DIR" $((RETENTION_WEEKLY_DAYS / 7)) "Weekly"
+cleanup_by_count "$MONTHLY_DIR" $((RETENTION_MONTHLY_DAYS / 30)) "Monthly"
 
 # Annual backups are kept indefinitely
 echo "  Annual backups are kept indefinitely." >> "$SCRIPT_LOG"
