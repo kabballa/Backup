@@ -10,25 +10,34 @@
 # Script: daily_backup.sh
 # Location: /opt/kabballa/apps/una-backup/daily_backup.sh
 # Purpose: Performs daily backups for UNA sites, handles rotation, and cleanup.
+#
+# RETENTION POLICY:
+# - Daily: Retain 7 days using mtime (time-based cleanup).
+# - Weekly & Monthly: Retain based on count (number of copies to keep) using file separation (MOVE).
+# - Annual: Retained indefinitely (MOVED only on Day 001).
 
 # ==============================================================================
 # 1. Load Environment Variables (.env)
 # ==============================================================================
-# Looks for .env in the 'data' subdirectory relative to the script's location
 ENV_FILE="$(dirname "$0")/data/.env" 
 
 if [ -f "$ENV_FILE" ]; then
     source "$ENV_FILE"
 else
-    # Fallback/Error handling if .env is missing or cannot be sourced
+    # CRITICAL ERROR: .env file missing. Using defaults.
     echo "CRITICAL ERROR: .env file not found at $ENV_FILE. Using defaults." >&2
     BASE_BACKUP_DIR="/opt/kabballa/apps/una-backup/data"
-    # WWW_DIR must remain here to define where to START looking for sites
-    WWW_DIR="/opt/una"
+    WWW_DIR="/opt/una" # Directory to start site search
     RETENTION_DAILY_DAYS=7
-    RETENTION_WEEKLY_DAYS=35
-    RETENTION_MONTHLY_DAYS=365
+    RETENTION_WEEKLY_COUNT=6
+    RETENTION_MONTHLY_COUNT=12
 fi
+
+# Ensure all necessary retention variables are set, using defaults if missing from .env
+RETENTION_DAILY_DAYS=${RETENTION_DAILY_DAYS:-7}
+RETENTION_WEEKLY_COUNT=${RETENTION_WEEKLY_COUNT:-6}
+RETENTION_MONTHLY_COUNT=${RETENTION_MONTHLY_COUNT:-12}
+WWW_DIR=${WWW_DIR:-/opt/una}
 
 # ==============================================================================
 # 2. Setup Directories and Date Variables
@@ -57,46 +66,48 @@ echo "===== Backup rotation started at $(date) =====" >> "$SCRIPT_LOG"
 # 3. Core Functions
 # ==============================================================================
 
-# Function to create hard links for long-term retention
-link_backups() {
-    local SITE_URL="$1"
+# Function to MOVE daily backups to long-term retention folders (separation)
+# Files are MOVED out of $DAILY_DIR to prevent the daily cleanup from touching them.
+handle_retention_move() {
+    # Variabila locala redenumita in BX_DOL_URL_ROOT (identificatorul site-ului curatat)
+    local BX_DOL_URL_ROOT="$1" 
     local SOURCE_FILE="$2"
     local FILE_TYPE="$3"
-
-    # Check for Sunday (Day 7) for weekly retention
-    if [ "$DAY_OF_WEEK" -eq 7 ]; then
-        DEST_FILE="$WEEKLY_DIR/$FILE_TYPE/${SITE_URL}-$DATE.tar.gz"
-        ln "$SOURCE_FILE" "$DEST_FILE"
-        echo "  🔗 Hard-linked $FILE_TYPE for WEEKLY retention." >> "$SCRIPT_LOG"
-    fi
-
-    # Check for the 1st day of the month for monthly retention
-    if [ "$DAY_OF_MONTH" -eq 01 ]; then
-        DEST_FILE="$MONTHLY_DIR/$FILE_TYPE/${SITE_URL}-$DATE.tar.gz"
-        ln "$SOURCE_FILE" "$DEST_FILE"
-        echo "  🔗 Hard-linked $FILE_TYPE for MONTHLY retention." >> "$SCRIPT_LOG"
-    fi
-
-    # Check for the 1st day of the year for annual retention
+    
+    local TARGET_DIR=""
+    local LOG_MSG=""
+    
+    # Prioritized selection for moving the file (only one move per file):
+    # 1. Annual (Day 001) - Highest priority move
     if [ "$DAY_OF_YEAR" -eq 001 ]; then
-        DEST_FILE="$ANNUAL_DIR/$FILE_TYPE/${SITE_URL}-$DATE.tar.gz"
-        ln "$SOURCE_FILE" "$DEST_FILE"
-        echo "  🔗 Hard-linked $FILE_TYPE for ANNUAL retention." >> "$SCRIPT_LOG"
+        TARGET_DIR="$ANNUAL_DIR"
+        LOG_MSG="ANNUAL"
+    # 2. Monthly (Day 01) - Second priority move
+    elif [ "$DAY_OF_MONTH" -eq 01 ]; then
+        TARGET_DIR="$MONTHLY_DIR"
+        LOG_MSG="MONTHLY"
+    # 3. Weekly (Day 7 / Sunday) - Third priority move
+    elif [ "$DAY_OF_WEEK" -eq 7 ]; then
+        TARGET_DIR="$WEEKLY_DIR"
+        LOG_MSG="WEEKLY"
+    fi
+    
+    # If a retention directory is selected, MOVE the file.
+    if [ -n "$TARGET_DIR" ]; then
+        DEST_FILE="$TARGET_DIR/$FILE_TYPE/${BX_DOL_URL_ROOT}-$DATE.tar.gz"
+        mv "$SOURCE_FILE" "$DEST_FILE"
+        echo "  ➡️ Moved $FILE_TYPE for $LOG_MSG retention." >> "$SCRIPT_LOG"
     fi
 }
 
 # Main function to perform backup for all detected UNA sites
 perform_daily_backup() {
-    # Find all UNA header files to detect sites within WWW_DIR
+    # Find all UNA header files starting from the defined path
     find "$WWW_DIR" -type f -path "*/inc/header.inc.php" | while read HEADER_FILE; do
         
         # --- Extract Site Path (BX_DIRECTORY_PATH_ROOT) ---
-        # NOTE: If BX_DIRECTORY_PATH_ROOT is not explicitly defined in header.inc.php, 
-        # the fallback extraction logic (dirname $(dirname "$HEADER_FILE")) is used, 
-        # which generally points to the site's root directory.
         SITE_DIR=$(grep "define('BX_DIRECTORY_PATH_ROOT'" "$HEADER_FILE" | cut -d"'" -f4)
         [ -z "$SITE_DIR" ] && SITE_DIR=$(dirname $(dirname "$HEADER_FILE"))
-
 
         # Extract DB details
         DB_NAME=$(grep "define('BX_DATABASE_NAME'" "$HEADER_FILE" | cut -d"'" -f4)
@@ -106,42 +117,57 @@ perform_daily_backup() {
         DB_SOCK=$(grep "define('BX_DATABASE_SOCK'" "$HEADER_FILE" | cut -d"'" -f4)
         
         # --- Extract and clean site URL (BX_DOL_URL_ROOT) for file naming ---
-        SITE_URL=$(grep "define('BX_DOL_URL_ROOT'" "$HEADER_FILE" | grep -v 'isset' | cut -d"'" -f4 | sed 's|https\?://||;s|/||g')
+        # Variabila redenumită din SITE_ID în BX_DOL_URL_ROOT pentru a urma cererea
+        BX_DOL_URL_ROOT=$(grep "define('BX_DOL_URL_ROOT'" "$HEADER_FILE" | grep -v 'isset' | cut -d"'" -f4 | sed 's|https\?://||;s|/||g')
+        [ -z "$BX_DOL_URL_ROOT" ] && BX_DOL_URL_ROOT=$(basename "$SITE_DIR")
 
-        # Fallback for site URL if extraction fails
-        [ -z "$SITE_URL" ] && SITE_URL=$(basename "$SITE_DIR")
-
-        echo "  Starting daily backup for $SITE_URL (Path: $SITE_DIR) at $(date)" >> "$SCRIPT_LOG"
+        echo "  Starting daily backup for $BX_DOL_URL_ROOT (Path: $SITE_DIR) at $(date)" >> "$SCRIPT_LOG"
 
         # --- 3.1. Files Backup (HTML) ---
-        TAR_FILE_PATH="$DAILY_DIR/html/${SITE_URL}-$DATE.tar.gz"
-        # Use SITE_DIR (BX_DIRECTORY_PATH_ROOT) as the source directory
+        TAR_FILE_PATH="$DAILY_DIR/html/${BX_DOL_URL_ROOT}-$DATE.tar.gz"
         tar -czf "$TAR_FILE_PATH" -C "$SITE_DIR" . 2>/dev/null
         
         if [ $? -eq 0 ]; then
-            echo "  ✔️ Files backup for $SITE_URL completed." >> "$SCRIPT_LOG"
-            link_backups "$SITE_URL" "$TAR_FILE_PATH" "html"
+            echo "  ✔️ Files backup for $BX_DOL_URL_ROOT completed." >> "$SCRIPT_LOG"
+            # MOVE the file if retention criteria are met
+            handle_retention_move "$BX_DOL_URL_ROOT" "$TAR_FILE_PATH" "html"
         else
-            echo "  ❌ Files backup for $SITE_URL failed." >> "$SCRIPT_LOG"
-            # Output error to stderr for cron email alert
-            echo "ERROR: Files backup failed for $SITE_URL (Source Dir: $SITE_DIR)." >&2 
+            echo "  ❌ Files backup for $BX_DOL_URL_ROOT failed." >> "$SCRIPT_LOG"
+            echo "ERROR: Files backup failed for $BX_DOL_URL_ROOT (Source Dir: $SITE_DIR)." >&2 
         fi
 
         # --- 3.2. Database Backup (DB) ---
-        DB_FILE_PATH="$DAILY_DIR/db/${SITE_URL}.db-$DATE.sql.gz"
+        DB_FILE_PATH="$DAILY_DIR/db/${BX_DOL_URL_ROOT}.db-$DATE.sql.gz"
         mysqldump --single-transaction --quick --lock-tables=false \
                   --user="$DB_USER" --password="$DB_PASS" \
                   --host="$DB_HOST" --socket="$DB_SOCK" "$DB_NAME" | gzip > "$DB_FILE_PATH" 2>/dev/null
         
         if [ $? -eq 0 ]; then
-            echo "  ✔️ Database backup for $SITE_URL completed." >> "$SCRIPT_LOG"
-            link_backups "$SITE_URL" "$DB_FILE_PATH" "db"
+            echo "  ✔️ Database backup for $BX_DOL_URL_ROOT completed." >> "$SCRIPT_LOG"
+            # MOVE the file if retention criteria are met
+            handle_retention_move "$BX_DOL_URL_ROOT" "$DB_FILE_PATH" "db"
         else
-            echo "  ❌ Database backup for $SITE_URL failed." >> "$SCRIPT_LOG"
-            # Output error to stderr for cron email alert
-            echo "ERROR: Database backup failed for $SITE_URL (DB: $DB_NAME)." >&2 
+            echo "  ❌ Database backup for $BX_DOL_URL_ROOT failed." >> "$SCRIPT_LOG"
+            echo "ERROR: Database backup failed for $BX_DOL_URL_ROOT (DB: $DB_NAME)." >&2 
         fi
     done
+}
+
+# Function to clean up based on file count (keeping $COUNT most recent files)
+cleanup_by_count() {
+    local DIR_PATH="$1"
+    local COUNT="$2"
+    local TYPE="$3"
+    
+    # +1 because 'ls -t | tail -n +X' keeps the first X-1 files and removes the rest.
+    local FILES_TO_KEEP=$((COUNT + 1)) 
+    
+    # Cleanup HTML backups (using ls -t | tail | xargs to keep the N most recent files)
+    (ls -t "$DIR_PATH/html"/*.tar.gz 2>/dev/null | tail -n +$FILES_TO_KEEP | xargs rm -f 2>/dev/null)
+    # Cleanup DB backups
+    (ls -t "$DIR_PATH/db"/*.sql.gz 2>/dev/null | tail -n +$FILES_TO_KEEP | xargs rm -f 2>/dev/null)
+    
+    echo "  🧹 Cleaned $TYPE backups, keeping the $COUNT most recent copies." >> "$SCRIPT_LOG"
 }
 
 # ==============================================================================
@@ -152,17 +178,20 @@ perform_daily_backup
 
 echo "--- Starting cleanup based on retention policy ---" >> "$SCRIPT_LOG"
 
-# Cleanup Daily backups
+# 4.1. Cleanup Daily backups (TIME-BASED: Keep 7 days)
+# These are the original source files, cleaned after 7 days, 
+# UNLESS they were moved to weekly/monthly/annual folders.
 find "$DAILY_DIR" -type f -mtime +$RETENTION_DAILY_DAYS -exec rm -f {} \;
 echo "  🧹 Cleaned Daily backups older than $RETENTION_DAILY_DAYS days." >> "$SCRIPT_LOG"
 
-# Cleanup Weekly backups
-find "$WEEKLY_DIR" -type f -mtime +$RETENTION_WEEKLY_DAYS -exec rm -f {} \;
-echo "  🧹 Cleaned Weekly backups older than $RETENTION_WEEKLY_DAYS days." >> "$SCRIPT_LOG"
+# 4.2. Cleanup Weekly backups (COUNT-BASED: Keep $RETENTION_WEEKLY_COUNT files)
+cleanup_by_count "$WEEKLY_DIR" "$RETENTION_WEEKLY_COUNT" "Weekly"
 
-# Cleanup Monthly backups
-find "$MONTHLY_DIR" -type f -mtime +$RETENTION_MONTHLY_DAYS -exec rm -f {} \;
-echo "  🧹 Cleaned Monthly backups older than $RETENTION_MONTHLY_DAYS days." >> "$SCRIPT_LOG"
+# 4.3. Cleanup Monthly backups (COUNT-BASED: Keep $RETENTION_MONTHLY_COUNT files)
+cleanup_by_count "$MONTHLY_DIR" "$RETENTION_MONTHLY_COUNT" "Monthly"
+
+# 4.4. Annual backups (NO CLEANUP: Kept indefinitely)
+echo "  Annual backups are kept indefinitely." >> "$SCRIPT_LOG"
 
 echo "===== Backup rotation completed at $(date) =====" >> "$SCRIPT_LOG"
 echo "" >> "$SCRIPT_LOG"
