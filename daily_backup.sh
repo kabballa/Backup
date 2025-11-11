@@ -24,7 +24,7 @@ else
     echo "CRITICAL ERROR: .env file not found at $ENV_FILE. Using defaults." >&2
     BASE_BACKUP_DIR="/opt/kabballa/apps/una-backup/data"
     # WWW_DIR must remain here to define where to START looking for sites
-    WWW_DIR="/opt/apps/una" 
+    WWW_DIR="/opt/una"
     RETENTION_DAILY_DAYS=7
     RETENTION_WEEKLY_DAYS=35
     RETENTION_MONTHLY_DAYS=365

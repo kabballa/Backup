@@ -24,46 +24,24 @@ This document describes how to configure and automate daily, weekly, monthly, an
 | `/opt/kabballa/apps/una-backup/` | **Base application directory** |
 | `/opt/kabballa/apps/una-backup/data/` | **Base backup directory for all data** |
 | `/opt/kabballa/apps/una-backup/data/.env` | Environment configuration file |
-| `/opt/apps/una` | Root directory containing UNA sites |
+| `/opt/una` | Root directory containing UNA sites |
 | `/opt/kabballa/apps/una-backup/daily_backup.sh` | Main backup automation script |
 | `/opt/kabballa/apps/una-backup/data/logs/backup_rotation.log` | Backup log file |
 
 ## ⚙️ 2. Environment Configuration (`.env`)
 
-Create the file:
-
-```
-
-/opt/kabballa/apps/una-backup/data/.env
-
-````
-
-with this content:
+#### Prepare the Environment Variables  
+Copy the example environment file and configure it:  
 
 ```bash
-# ----------------------------------------------------------------------------------#
-#                                                                                   #
-#   Copyright (C) 2009 - 2025 Coozila! Licensed under the MIT License.              #
-#   Coozila! Team    lab@coozila.com                                                #
-#                                                                                   #
-# ----------------------------------------------------------------------------------#
+cp .env.example .env  
+```  
+Edit the `.env` file to set the required variables for your setup.  
 
-# The base directory where all backups are stored
-BASE_BACKUP_DIR="/opt/kabballa/apps/una-backup/data"
-
-# The main directory where the sites are located
-WWW_DIR="/opt/apps/una"
-
-# Retention periods (in days)
-RETENTION_DAILY_DAYS=7
-RETENTION_WEEKLY_DAYS=35
-RETENTION_MONTHLY_DAYS=365
-# Annual backups are kept indefinitely
-````
+---
 
 ## 🧠 3. Main Script (`daily_backup.sh`)
 
-Place this file at:
 
 ```
 /opt/kabballa/apps/una-backup/daily_backup.sh
@@ -75,31 +53,9 @@ Make it executable:
 chmod +x /opt/kabballa/apps/una-backup/daily_backup.sh
 ```
 
-### 📜 Script Content (For Reference - Full script must be provided separately)
-
-The script handles loading environment variables, setting up directories, performing the backup (files/DB), applying hard links for retention (weekly/monthly/annual), and cleaning up old files.
-
-```bash
-# ----------------------------------------------------------------------------------#
-#                                                                                   #
-#   Copyright (C) 2009 - 2025 Coozila! Licensed under the MIT License.              #
-#   Coozila! Team    lab@coozila.com                                                #
-#                                                                                   #
-# ----------------------------------------------------------------------------------#
-
-#!/bin/bash
-# ... (Full script content is available in the separate daily_backup.sh file)
-```
-
 ## ⏰ 4. Automate the Script with Cron
 
-### Step A: Make Executable
-
-```bash
-chmod +x /opt/kabballa/apps/una-backup/daily_backup.sh
-```
-
-### Step B: Edit the Crontab
+### Edit the Crontab
 
 ```bash
 crontab -e
