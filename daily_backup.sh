@@ -9,7 +9,7 @@
 
 # Script: daily_backup.sh
 # Location: /opt/kabballa/apps/una-backup/daily_backup.sh
-# Purpose: Performs daily backups for UNA sites, handles rotation, and cleanup.
+# Purpose: Performs daily backups for the UNA site defined in .env, handles rotation, and cleanup.
 #
 # RETENTION POLICY:
 # - Daily: Retain 7 days using mtime (time-based cleanup).
@@ -27,7 +27,7 @@ else
     # CRITICAL ERROR: .env file missing. Using defaults.
     echo "CRITICAL ERROR: .env file not found at $ENV_FILE. Using defaults." >&2
     BASE_BACKUP_DIR="/opt/kabballa/apps/una-backup/data"
-    WWW_DIR="/opt/una"
+    WWW_DIR="/opt/una"             # Path to the single site
     RETENTION_DAILY_DAYS=7
     RETENTION_WEEKLY_COUNT=6
     RETENTION_MONTHLY_COUNT=12
@@ -92,58 +92,63 @@ handle_retention_move() {
     fi
 }
 
-# Main function to perform backup for all detected UNA sites
+# Perform daily backup for the UNA site configured in .env
 perform_daily_backup() {
-    find "$WWW_DIR" -type f -path "*/inc/header.inc.php" | while read HEADER_FILE; do
-        
-        SITE_DIR=$(grep "define('BX_DIRECTORY_PATH_ROOT'" "$HEADER_FILE" | cut -d"'" -f4)
-        [ -z "$SITE_DIR" ] && SITE_DIR=$(dirname $(dirname "$HEADER_FILE"))
+    HEADER_FILE="$WWW_DIR/inc/header.inc.php"
 
-        DB_NAME=$(grep "define('BX_DATABASE_NAME'" "$HEADER_FILE" | cut -d"'" -f4)
-        DB_USER=$(grep "define('BX_DATABASE_USER'" "$HEADER_FILE" | cut -d"'" -f4)
-        DB_PASS=$(grep "define('BX_DATABASE_PASS'" "$HEADER_FILE" | cut -d"'" -f4)
-        DB_HOST=$(grep "define('BX_DATABASE_HOST'" "$HEADER_FILE" | cut -d"'" -f4)
-        DB_SOCK=$(grep "define('BX_DATABASE_SOCK'" "$HEADER_FILE" | cut -d"'" -f4)
-        
-        BX_DOL_URL_ROOT=$(grep "define('BX_DOL_URL_ROOT'" "$HEADER_FILE" | grep -v 'isset' | cut -d"'" -f4 | sed 's|https\?://||;s|/||g')
-        [ -z "$BX_DOL_URL_ROOT" ] && BX_DOL_URL_ROOT=$(basename "$SITE_DIR")
+    if [ ! -f "$HEADER_FILE" ]; then
+        echo "ERROR: header.inc.php not found in $WWW_DIR. Backup aborted." >&2
+        echo "  ❌ Backup aborted: header.inc.php missing." >> "$SCRIPT_LOG"
+        return
+    fi
 
-        echo "  Starting daily backup for $BX_DOL_URL_ROOT (Path: $SITE_DIR) at $(date)" >> "$SCRIPT_LOG"
+    SITE_DIR=$(grep "define('BX_DIRECTORY_PATH_ROOT'" "$HEADER_FILE" | cut -d"'" -f4)
+    [ -z "$SITE_DIR" ] && SITE_DIR="$WWW_DIR"
 
-        # --- 3.1. Files Backup (HTML) ---
-        TAR_FILE_PATH="$DAILY_DIR/html/${BX_DOL_URL_ROOT}-$DATE.tar.gz"
-        tar -czf "$TAR_FILE_PATH" -C "$SITE_DIR" . 2>/dev/null
-        
+    DB_NAME=$(grep "define('BX_DATABASE_NAME'" "$HEADER_FILE" | cut -d"'" -f4)
+    DB_USER=$(grep "define('BX_DATABASE_USER'" "$HEADER_FILE" | cut -d"'" -f4)
+    DB_PASS=$(grep "define('BX_DATABASE_PASS'" "$HEADER_FILE" | cut -d"'" -f4)
+    DB_HOST=$(grep "define('BX_DATABASE_HOST'" "$HEADER_FILE" | cut -d"'" -f4)
+    DB_SOCK=$(grep "define('BX_DATABASE_SOCK'" "$HEADER_FILE" | cut -d"'" -f4)
+    
+    BX_DOL_URL_ROOT=$(grep "define('BX_DOL_URL_ROOT'" "$HEADER_FILE" | grep -v 'isset' | cut -d"'" -f4 | sed 's|https\?://||;s|/||g')
+    [ -z "$BX_DOL_URL_ROOT" ] && BX_DOL_URL_ROOT=$(basename "$SITE_DIR")
+
+    echo "  Starting daily backup for $BX_DOL_URL_ROOT (Path: $SITE_DIR) at $(date)" >> "$SCRIPT_LOG"
+
+    # --- Files Backup (HTML) ---
+    TAR_FILE_PATH="$DAILY_DIR/html/${BX_DOL_URL_ROOT}-$DATE.tar.gz"
+    tar -czf "$TAR_FILE_PATH" -C "$SITE_DIR" . 2>/dev/null
+    
+    if [ $? -eq 0 ]; then
+        echo "  ✔️ Files backup for $BX_DOL_URL_ROOT completed." >> "$SCRIPT_LOG"
+        handle_retention_move "$BX_DOL_URL_ROOT" "$TAR_FILE_PATH" "html"
+    else
+        echo "  ❌ Files backup for $BX_DOL_URL_ROOT failed." >> "$SCRIPT_LOG"
+        echo "ERROR: Files backup failed for $BX_DOL_URL_ROOT (Source Dir: $SITE_DIR)." >&2 
+    fi
+
+    # --- Database Backup (DB) ---
+    DB_FILE_PATH="$DAILY_DIR/db/${BX_DOL_URL_ROOT}.db-$DATE.sql.gz"
+
+    if ! command -v mysqldump >/dev/null 2>&1; then
+        echo "  ❌ mysqldump not found. Skipping database backup for $BX_DOL_URL_ROOT." >> "$SCRIPT_LOG"
+    else
+        DB_SOCKET_ARG=""
+        [ -n "$DB_SOCK" ] && DB_SOCKET_ARG="--socket=$DB_SOCK"
+
+        mysqldump --single-transaction --quick --lock-tables=false \
+                  --user="$DB_USER" --password="$DB_PASS" \
+                  --host="$DB_HOST" $DB_SOCKET_ARG "$DB_NAME" | gzip > "$DB_FILE_PATH" 2>/dev/null
+
         if [ $? -eq 0 ]; then
-            echo "  ✔️ Files backup for $BX_DOL_URL_ROOT completed." >> "$SCRIPT_LOG"
-            handle_retention_move "$BX_DOL_URL_ROOT" "$TAR_FILE_PATH" "html"
+            echo "  ✔️ Database backup for $BX_DOL_URL_ROOT completed." >> "$SCRIPT_LOG"
+            handle_retention_move "$BX_DOL_URL_ROOT" "$DB_FILE_PATH" "db"
         else
-            echo "  ❌ Files backup for $BX_DOL_URL_ROOT failed." >> "$SCRIPT_LOG"
-            echo "ERROR: Files backup failed for $BX_DOL_URL_ROOT (Source Dir: $SITE_DIR)." >&2 
+            echo "  ❌ Database backup for $BX_DOL_URL_ROOT failed." >> "$SCRIPT_LOG"
+            echo "ERROR: Database backup failed for $BX_DOL_URL_ROOT (DB: $DB_NAME)." >&2 
         fi
-
-        # --- 3.2. Database Backup (DB) ---
-        DB_FILE_PATH="$DAILY_DIR/db/${BX_DOL_URL_ROOT}.db-$DATE.sql.gz"
-
-        if ! command -v mysqldump >/dev/null 2>&1; then
-            echo "  ❌ mysqldump not found. Skipping database backup for $BX_DOL_URL_ROOT." >> "$SCRIPT_LOG"
-        else
-            DB_SOCKET_ARG=""
-            [ -n "$DB_SOCK" ] && DB_SOCKET_ARG="--socket=$DB_SOCK"
-
-            mysqldump --single-transaction --quick --lock-tables=false \
-                      --user="$DB_USER" --password="$DB_PASS" \
-                      --host="$DB_HOST" $DB_SOCKET_ARG "$DB_NAME" | gzip > "$DB_FILE_PATH" 2>/dev/null
-
-            if [ $? -eq 0 ]; then
-                echo "  ✔️ Database backup for $BX_DOL_URL_ROOT completed." >> "$SCRIPT_LOG"
-                handle_retention_move "$BX_DOL_URL_ROOT" "$DB_FILE_PATH" "db"
-            else
-                echo "  ❌ Database backup for $BX_DOL_URL_ROOT failed." >> "$SCRIPT_LOG"
-                echo "ERROR: Database backup failed for $BX_DOL_URL_ROOT (DB: $DB_NAME)." >&2 
-            fi
-        fi
-    done
+    fi
 }
 
 # Cleanup function based on file count
