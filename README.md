@@ -21,8 +21,6 @@ If you want to support our project and help us grow it, you can [become a sponso
 This document describes how to configure and automate daily, weekly, monthly, and annual backups for UNA-based sites using **Coozila! KABBALLA Backup System**.
 
 
----
-
 ## 📁 1. Directory Structure & Files
 
 | Path                                                  | Description                    |
@@ -32,8 +30,6 @@ This document describes how to configure and automate daily, weekly, monthly, an
 | `/opt/apps/una`                                       | Root directory with UNA sites  |
 | `/opt/kabballa/scripts/daily_backup.sh`               | Main backup automation script  |
 | `/opt/kabballa/data/backups/logs/backup_rotation.log` | Backup log file                |
-
----
 
 ## ⚙️ 2. Environment Configuration (`.env`)
 
@@ -65,8 +61,6 @@ RETENTION_WEEKLY_DAYS=35
 RETENTION_MONTHLY_DAYS=365
 # Annual backups are kept indefinitely
 ```
-
----
 
 ## 🧠 3. Main Script (`daily_backup.sh`)
 
@@ -218,8 +212,6 @@ echo "===== Backup rotation completed at $(date) =====" >> "$SCRIPT_LOG"
 echo "" >> "$SCRIPT_LOG"
 ```
 
----
-
 ## ⏰ 4. Automate the Script with Cron
 
 ### Step A: Make Executable
@@ -252,16 +244,12 @@ MAILTO="your.email@example.com"
 0 3 * * * /opt/kabballa/scripts/daily_backup.sh >>/dev/null
 ```
 
----
-
 ## 📧 5. Email Alert Behavior
 
 | Type      | Behavior                                                           |
 | --------- | ------------------------------------------------------------------ |
 | ✅ Success | All logs written to `$SCRIPT_LOG`. No output → no email.           |
 | ⚠️ Error  | Script writes to `stderr` → cron sends an alert email to `MAILTO`. |
-
----
 
 ## 🔍 6. Verification
 
@@ -277,8 +265,6 @@ You should see:
 ===== Backup rotation completed at YYYY-MM-DD HH:MM:SS =====
 ```
 
----
-
 ## ✅ Summary
 
 | Task                   | Command                                                   |
@@ -289,8 +275,23 @@ You should see:
 | Edit cron              | `crontab -e`                                              |
 | Edit .env              | `nano /opt/kabballa/data/backups/.env`                    |
 
----
-
 > 🧠 **Tip:** Extend the backup system with `rclone` or `rsync` to replicate backups to remote storage (e.g., S3, Google Drive, Ceph Object Gateway).
 
 ```
+## Trademarks and Copyright
+
+This software listing is packaged by Romulus. All trademarks mentioned are the property of their respective owners, and their use does not imply any affiliation or endorsement.
+
+### Copyright
+
+Copyright (C) Coozila! Licensed under the MIT License.
+
+### Licenses
+
+- **Coozila!**: [MIT License](https://github.com/kabballa/Backup/blob/main/LICENSE)
+
+## Disclaimer
+
+This product is provided "as is," without any guarantees or warranties regarding its functionality, performance, or reliability. By using this product, you acknowledge that you do so at your own risk. Romulus and its contributors are not liable for any issues, damages, or losses that may arise from the use of this product. We recommend thoroughly testing the product in your own environment before deploying it in a production setting.
+
+Happy coding!
