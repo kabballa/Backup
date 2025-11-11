@@ -26,9 +26,9 @@ This document describes how to configure and automate daily, weekly, monthly, an
 | Path                                                  | Description                    |
 | ----------------------------------------------------- | ------------------------------ |
 | `/opt/kabballa/data/backups/`                         | Base backup directory          |
-| `/opt/kabballa/scripts/.env`                          | Environment configuration file |
+| `/opt/kabballa/backup/.env`                          | Environment configuration file |
 | `/opt/apps/una`                                       | Root directory with UNA sites  |
-| `/opt/kabballa/scripts/daily_backup.sh`               | Main backup automation script  |
+| `/opt/kabballa/backup/daily_backup.sh`               | Main backup automation script  |
 | `/opt/kabballa/data/backups/logs/backup_rotation.log` | Backup log file                |
 
 ## ⚙️ 2. Environment Configuration (`.env`)
@@ -67,13 +67,13 @@ RETENTION_MONTHLY_DAYS=365
 Place this file at:
 
 ```
-/opt/kabballa/scripts/daily_backup.sh
+/opt/kabballa/backup/daily_backup.sh
 ```
 
 Make it executable:
 
 ```bash
-chmod +x /opt/kabballa/scripts/daily_backup.sh
+chmod +x /opt/kabballa/backup/daily_backup.sh
 ```
 
 ### 📜 Script Content
@@ -217,7 +217,7 @@ echo "" >> "$SCRIPT_LOG"
 ### Step A: Make Executable
 
 ```bash
-chmod +x /opt/kabballa/scripts/daily_backup.sh
+chmod +x /opt/kabballa/backup/daily_backup.sh
 ```
 
 ### Step B: Edit the Crontab
@@ -241,7 +241,7 @@ MAILTO="your.email@example.com"
 # Schedule: Runs daily at 03:00 AM
 # Redirects only STDOUT (success messages) to /dev/null
 # STDERR (critical errors) are emailed automatically
-0 3 * * * /opt/kabballa/scripts/daily_backup.sh >>/dev/null
+0 3 * * * /opt/kabballa/backup/daily_backup.sh >>/dev/null
 ```
 
 ## 📧 5. Email Alert Behavior
@@ -269,8 +269,8 @@ You should see:
 
 | Task                   | Command                                                   |
 | ---------------------- | --------------------------------------------------------- |
-| Make script executable | `chmod +x /opt/kabballa/scripts/daily_backup.sh`          |
-| Test manually          | `/opt/kabballa/scripts/daily_backup.sh`                   |
+| Make script executable | `chmod +x /opt/kabballa/backup/daily_backup.sh`          |
+| Test manually          | `/opt/kabballa/backup/daily_backup.sh`                   |
 | View logs              | `cat /opt/kabballa/data/backups/logs/backup_rotation.log` |
 | Edit cron              | `crontab -e`                                              |
 | Edit .env              | `nano /opt/kabballa/data/backups/.env`                    |
