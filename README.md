@@ -1,4 +1,22 @@
+<p align="center">
+    <a href=https://github.com/kabballa/Backupv/main/LICENSE" target="_blank"><img src="https://img.shields.io/badge/license-MIT-1c7ed6" alt="License" /></a>
+</p>
+
+> If you enjoy the project, please consider giving us a GitHub star ⭐️. Thank you!
+
+## Sponsors
+
+If you want to support our project and help us grow it, you can [become a sponsor on GitHub](https://github.com/sponsors/olariuromeo)
+
+<p align="center">
+  <a href="https://github.com/sponsors/olariuromeo">
+  </a>
+</p>
+
 # 🧩 KABBALLA – Automated Backup & Retention System
+
+![Backupv](assets/backup.png)
+
 
 This document describes how to configure and automate daily, weekly, monthly, and annual backups for UNA-based sites using **Coozila! KABBALLA Backup System**.
 
