@@ -1,18 +1,3 @@
-### **✨ New Open-Source Project: UNA Backup is Live! (In Development) ✨**
-
-We are thrilled to announce the launch of a new open-source project: **UNA Backup**!
-
-This is a dynamic and flexible backup system designed to help you protect your essential data.
-
-**Please note: UNA Backup is currently in active development.** This means features may evolve, and we are continuously working to improve it.
-
-We believe in the power of collaboration, so **all suggestions, ideas, and contributions are highly welcome!** Your early feedback and involvement are crucial as we shape this project.
-
-**Contribute now and help us build it!**
-
-Thank you for your support and contributions!
-
-
 <p align="center">
     <a href=https://github.com/kabballa/una-backup/master/LICENSE" target="_blank"><img src="https://img.shields.io/badge/license-MIT-1c7ed6" alt="License" /></a>
 </p>
