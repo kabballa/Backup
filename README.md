@@ -169,14 +169,16 @@ Licensed under the [MIT License](https://github.com/kabballa/una-backup/blob/mas
 
 ## Installation Assistance
 
-If you would like assistance with the installation of **KABBALLA – UNA APP Automated Backup & Retention System**, please contact **Romulus** at [lab@cooxila.comt](mailto:lab@cooxila.com).  
+If you would like assistance with the installation of **KABBALLA – UNA APP Automated Backup & Retention System**, please contact **Romulus** at [lab@coozila.com](mailto:lab@coozila.com).  
 I will be happy to help you with the installation process and ensure a smooth setup.
 
 Based on the size and complexity of your UNA project, we will provide you with a tailored pricing quote.
 
+If you prefer, you can also directly pay for professional installation assistance via this product page:  
+[Purchase KABBALLA Installation](https://unacms.com/view-product/-kabballa-backup-for-una-cms)
+
 You can also check out my profile for more information and other UNA-related solutions:  
 [Romulus](https://unacms.com/u/olariu-romeo-vicentiu)
-
 
 ### After Purchase Notes
 
