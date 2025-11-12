@@ -1,0 +1,6 @@
+# Ignore all .env files in all directories
+**/.env
+
+# Allow all .env.example files
+!.env.example
+**/!.env.example
