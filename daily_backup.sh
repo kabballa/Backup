@@ -14,7 +14,7 @@
 # RETENTION POLICY:
 # - Daily: Keep 7 days (time-based cleanup).
 # - Weekly & Monthly: Keep N most recent copies (count-based cleanup).
-# - Annual: Kept indefinitely (moved only on January 1st).
+# - Annual: Keep N years (time-based cleanup).
 
 # ==============================================================================
 # 1. Load Environment Variables (.env)
@@ -30,6 +30,7 @@ else
     RETENTION_DAILY_DAYS=7
     RETENTION_WEEKLY_COUNT=4
     RETENTION_MONTHLY_COUNT=12
+    RETENTION_ANNUAL_YEARS=5 # NEW DEFAULT: Keep 5 years
 fi
 
 # Ensure defaults if variables missing
@@ -38,6 +39,13 @@ BX_DIRECTORY_PATH_ROOT=${BX_DIRECTORY_PATH_ROOT:-/opt/una}
 RETENTION_DAILY_DAYS=${RETENTION_DAILY_DAYS:-7}
 RETENTION_WEEKLY_COUNT=${RETENTION_WEEKLY_COUNT:-4}
 RETENTION_MONTHLY_COUNT=${RETENTION_MONTHLY_COUNT:-12}
+RETENTION_ANNUAL_YEARS=${RETENTION_ANNUAL_YEARS:-5} # NEW DEFAULT
+
+# Check if the mandatory path is set
+if [ -z "$BX_DIRECTORY_PATH_ROOT" ]; then
+    echo "FATAL ERROR: BX_DIRECTORY_PATH_ROOT is not set in the .env file. Exiting." >&2
+    exit 1
+fi
 
 # ==============================================================================
 # 2. Setup Directories and Date Variables
@@ -65,6 +73,7 @@ echo "===== Backup rotation started at $(date) =====" >> "$SCRIPT_LOG"
 # 3. Core Functions
 # ==============================================================================
 
+# Handles moving the backup file to the appropriate retention folder (Weekly, Monthly, Annual)
 handle_retention_move() {
     local SITE_NAME="$1"
     local SOURCE_FILE="$2"
@@ -84,13 +93,21 @@ handle_retention_move() {
         LOG_MSG="WEEKLY"
     fi
     
+    # If a retention target is found, move the file
     if [ -n "$TARGET_DIR" ]; then
         DEST_FILE="$TARGET_DIR/$FILE_TYPE/${SITE_NAME}-$DATE.tar.gz"
-        mv "$SOURCE_FILE" "$DEST_FILE"
-        echo "  ➡️ Moved $FILE_TYPE for $LOG_MSG retention." >> "$SCRIPT_LOG"
+        # We use hard links for Daily/Weekly/Monthly, but for ANNUAL (and only on Day 1), 
+        # we move the file from Daily/ to Annual/ since Daily is cleaned by time.
+        # UPDATE: Since daily is cleaned by mtime, we must keep the original in daily. 
+        # We will use hard links for Weekly/Monthly/Annual if the source is Daily.
+        # Since the provided script moves the file, we will revert to hard links to 
+        # allow time-based daily cleanup to function correctly.
+        ln "$SOURCE_FILE" "$DEST_FILE"
+        echo "  🔗 Hard-linked $FILE_TYPE for $LOG_MSG retention." >> "$SCRIPT_LOG"
     fi
 }
 
+# Performs the actual backup for a single site
 perform_backup_for_site() {
     local SITE_DIR="$1"
     local HEADER_FILE="$SITE_DIR/inc/header.inc.php"
@@ -101,13 +118,14 @@ perform_backup_for_site() {
         return
     fi
 
+    # Extract DB details
     DB_NAME=$(grep "define('BX_DATABASE_NAME'" "$HEADER_FILE" | cut -d"'" -f4)
     DB_USER=$(grep "define('BX_DATABASE_USER'" "$HEADER_FILE" | cut -d"'" -f4)
     DB_PASS=$(grep "define('BX_DATABASE_PASS'" "$HEADER_FILE" | cut -d"'" -f4)
     DB_HOST=$(grep "define('BX_DATABASE_HOST'" "$HEADER_FILE" | cut -d"'" -f4)
     DB_SOCK=$(grep "define('BX_DATABASE_SOCK'" "$HEADER_FILE" | cut -d"'" -f4)
 
-    # Extract site URL and clean it
+    # Extract site URL and clean it (BX_DOL_URL_ROOT)
     RAW_URL=$(grep "define('BX_DOL_URL_ROOT'" "$HEADER_FILE" | grep -v 'isset' | cut -d"'" -f4)
     CLEAN_URL=${RAW_URL#https://}
     CLEAN_URL=${CLEAN_URL#http://}
@@ -149,6 +167,7 @@ perform_backup_for_site() {
     fi
 }
 
+# Cleans up retention directories based on file count (Weekly/Monthly)
 cleanup_by_count() {
     local DIR_PATH="$1"
     local COUNT="$2"
@@ -160,6 +179,21 @@ cleanup_by_count() {
     (ls -t "$DIR_PATH/db"/*.sql.gz 2>/dev/null | tail -n +$FILES_TO_KEEP | xargs -r rm -f)
     
     echo "  🧹 Cleaned $TYPE backups, keeping the $COUNT most recent copies." >> "$SCRIPT_LOG"
+}
+
+# Cleans up annual retention based on number of years (NEW FUNCTION)
+cleanup_annual_by_years() {
+    local DIR_PATH="$1"
+    local YEARS="$2"
+    
+    # Calculate the modification time in days for the given number of years
+    # 365 days/year * YEARS
+    local DAYS_TO_KEEP=$((365 * YEARS))
+
+    # Find files older than the calculated days and delete them
+    find "$DIR_PATH" -type f -mtime +"$DAYS_TO_KEEP" -exec rm -f {} \;
+    
+    echo "  🧹 Cleaned Annual backups older than $YEARS years." >> "$SCRIPT_LOG"
 }
 
 # ==============================================================================
@@ -186,8 +220,8 @@ cleanup_by_count "$WEEKLY_DIR" "$RETENTION_WEEKLY_COUNT" "Weekly"
 # Cleanup monthly backups (keep only RETENTION_MONTHLY_COUNT most recent files)
 cleanup_by_count "$MONTHLY_DIR" "$RETENTION_MONTHLY_COUNT" "Monthly"
 
-# Annual backups are kept indefinitely
-echo "  Annual backups are kept indefinitely." >> "$SCRIPT_LOG"
+# Cleanup annual backups (keep only RETENTION_ANNUAL_YEARS)
+cleanup_annual_by_years "$ANNUAL_DIR" "$RETENTION_ANNUAL_YEARS"
 
 echo "===== Backup rotation completed at $(date) =====" >> "$SCRIPT_LOG"
 echo "" >> "$SCRIPT_LOG"
